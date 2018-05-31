@@ -1,7 +1,10 @@
-use amethyst_assets::{AssetPrefab, Format, PrefabData, ProgressCounter};
+use amethyst_assets::{AssetPrefab, AssetStorage, Format, Handle, Loader, Prefab, PrefabData,
+                      PrefabLoaderSystem, Progress, ProgressCounter, Result as AssetResult,
+                      ResultExt, SimpleFormat};
 use amethyst_core::specs::error::Error;
-use amethyst_core::specs::prelude::{Entity, WriteStorage};
+use amethyst_core::specs::prelude::{Entity, Read, ReadExpect, WriteStorage};
 use amethyst_renderer::{Texture, TextureMetadata, TexturePrefab};
+use serde::Deserialize;
 
 use {Anchor, Anchored, FontAsset, MouseReactive, Stretch, Stretched, TextEditing, UiImage, UiText,
      UiTransform};
@@ -286,4 +289,172 @@ where
     ) -> Result<bool, Error> {
         self.image.trigger_sub_loading(progress, &mut system_data.1)
     }
+}
+
+/// Loadable ui components
+///
+/// ### Type parameters:
+///
+/// - `I`: `Format` used for loading `Texture`s
+/// - `F`: `Format` used for loading `FontAsset`
+#[derive(Serialize, Deserialize)]
+pub enum UiWidget<I, F>
+where
+    I: Format<Texture, Options = TextureMetadata>,
+    F: Format<FontAsset, Options = ()>,
+{
+    /// Container component, have a transform, an optional background image, and children
+    Container(
+        UiTransformBuilder,
+        Option<UiImageBuilder<I>>,
+        Vec<UiWidget<I, F>>,
+    ),
+    /// Image component, have a transform and an image
+    Image(UiTransformBuilder, UiImageBuilder<I>),
+    /// Text component, have a transform and text
+    Text(UiTransformBuilder, UiTextBuilder<F>),
+    /// Button component, have a transform, an image and text
+    Button(UiTransformBuilder, UiImageBuilder<I>, UiTextBuilder<F>),
+}
+
+type UiPrefabData<I, F> = (
+    Option<UiTransformBuilder>,
+    Option<UiImageBuilder<I>>,
+    Option<UiTextBuilder<F>>,
+);
+
+/// Ui prefab
+///
+/// ### Type parameters:
+///
+/// - `I`: `Format` used for loading `Texture`s
+/// - `F`: `Format` used for loading `FontAsset`
+pub type UiPrefab<I, F> = Prefab<UiPrefabData<I, F>>;
+
+/// Ui format.
+///
+/// Load `UiPrefab` from `ron` file.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UiFormat;
+
+impl<I, F> SimpleFormat<UiPrefab<I, F>> for UiFormat
+where
+    I: Format<Texture, Options = TextureMetadata> + Sync + for<'a> Deserialize<'a>,
+    F: Format<FontAsset, Options = ()> + Sync + for<'a> Deserialize<'a>,
+{
+    const NAME: &'static str = "Ui";
+    type Options = ();
+
+    fn import(&self, bytes: Vec<u8>, _: ()) -> AssetResult<UiPrefab<I, F>> {
+        use ron::de::Deserializer;
+        use serde::Deserialize;
+        let mut d = Deserializer::from_bytes(&bytes).chain_err(|| "Failed deserializing Ron file")?;
+        let root: UiWidget<I, F> =
+            UiWidget::deserialize(&mut d).chain_err(|| "Failed parsing Ron file")?;
+        d.end().chain_err(|| "Failed parsing Ron file")?;
+
+        let mut prefab = Prefab::new();
+        walk_ui_tree(root, None, &mut prefab);
+
+        Ok(prefab)
+    }
+}
+
+fn walk_ui_tree<I, F>(
+    widget: UiWidget<I, F>,
+    parent: Option<usize>,
+    prefab: &mut Prefab<UiPrefabData<I, F>>,
+) where
+    I: Format<Texture, Options = TextureMetadata>,
+    F: Format<FontAsset, Options = ()>,
+{
+    match widget {
+        UiWidget::Image(transform, image) => {
+            prefab.add(parent, Some((Some(transform), Some(image), None)));
+        }
+
+        UiWidget::Text(transform, text) => {
+            prefab.add(parent, Some((Some(transform), None, Some(text))));
+        }
+
+        UiWidget::Button(transform, image, text) => {
+            let id = transform.id.clone();
+            let current_index = prefab.add(
+                parent,
+                Some((Some(transform.reactive()), Some(image), None)),
+            );
+            prefab.add(
+                Some(current_index),
+                Some((Some(button_text_transform(id)), None, Some(text))),
+            );
+        }
+
+        UiWidget::Container(transform, image, children) => {
+            let current_index = prefab.add(parent, Some((Some(transform), image, None)));
+            for child_widget in children {
+                walk_ui_tree(child_widget, Some(current_index), prefab);
+            }
+        }
+    }
+}
+
+/// Specialised UI loader
+///
+/// The recommended way of using this in `State`s is with `world.exec`.
+///
+/// ### Type parameters:
+///
+/// - `I`: `Format` used for loading `Texture`s
+/// - `F`: `Format` used for loading `FontAsset`
+///
+/// ### Example:
+///
+/// ```rust,ignore
+/// let ui_handle = world.exec(|loader: UiLoader<TextureFormat, FontFormat>| {
+///     loader.load("renderable.ron", ())
+/// });
+/// ```
+#[derive(SystemData)]
+pub struct UiLoader<'a, I, F>
+where
+    I: Format<Texture, Options = TextureMetadata> + Sync,
+    F: Format<FontAsset, Options = ()> + Sync,
+{
+    loader: ReadExpect<'a, Loader>,
+    storage: Read<'a, AssetStorage<UiPrefab<I, F>>>,
+}
+
+impl<'a, I, F> UiLoader<'a, I, F>
+where
+    I: Format<Texture, Options = TextureMetadata> + Sync + for<'b> Deserialize<'b>,
+    F: Format<FontAsset, Options = ()> + Sync + for<'b> Deserialize<'b>,
+{
+    /// Load ui from disc
+    pub fn load<N, P>(&self, name: N, progress: P) -> Handle<UiPrefab<I, F>>
+    where
+        N: Into<String>,
+        P: Progress,
+    {
+        self.loader
+            .load(name, UiFormat, (), progress, &self.storage)
+    }
+}
+
+/// Prefab loader system for UI
+///
+/// ### Type parameters:
+///
+/// - `I`: `Format` used for loading `Texture`s
+/// - `F`: `Format` used for loading `FontAsset`
+pub type UiLoaderSystem<I, F> = PrefabLoaderSystem<UiPrefabData<I, F>>;
+
+fn button_text_transform(mut id: String) -> UiTransformBuilder {
+    id.push_str("_btn_txt");
+    UiTransformBuilder::default()
+        .with_id(id)
+        .with_position(0., 0., -1.)
+        .with_tab_order(10)
+        .with_anchor(Anchor::Middle)
+        .with_stretch(Stretch::XY, 0., 0.)
+        .transparent()
 }

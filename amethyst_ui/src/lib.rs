@@ -52,7 +52,8 @@ pub use self::image::UiImage;
 pub use self::layout::{Anchor, Anchored, ScaleMode, Stretch, Stretched, UiLayoutSystem,
                        UiParentSystem};
 pub use self::pass::DrawUi;
-pub use self::prefab::{UiImageBuilder, UiTextBuilder, UiTransformBuilder};
+pub use self::prefab::{UiFormat, UiImageBuilder, UiLoader, UiLoaderSystem, UiTextBuilder,
+                       UiTransformBuilder, UiWidget};
 pub use self::resize::{ResizeSystem, UiResize};
 pub use self::text::{TextEditing, UiSystem, UiText};
 pub use self::transform::{UiFinder, UiTransform};
