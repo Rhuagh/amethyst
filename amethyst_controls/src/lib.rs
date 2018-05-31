@@ -5,6 +5,8 @@ extern crate amethyst_input;
 extern crate amethyst_renderer;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate serde;
 extern crate winit;
 
 #[cfg(feature = "profiler")]

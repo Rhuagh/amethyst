@@ -38,6 +38,7 @@ mod format;
 mod image;
 mod layout;
 mod pass;
+mod prefab;
 mod resize;
 mod text;
 mod transform;
@@ -51,6 +52,7 @@ pub use self::image::UiImage;
 pub use self::layout::{Anchor, Anchored, ScaleMode, Stretch, Stretched, UiLayoutSystem,
                        UiParentSystem};
 pub use self::pass::DrawUi;
+pub use self::prefab::{UiImageBuilder, UiTextBuilder, UiTransformBuilder};
 pub use self::resize::{ResizeSystem, UiResize};
 pub use self::text::{TextEditing, UiSystem, UiText};
 pub use self::transform::{UiFinder, UiTransform};

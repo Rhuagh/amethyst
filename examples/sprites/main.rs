@@ -27,9 +27,9 @@ use amethyst::ecs::prelude::Entity;
 use amethyst::input::{InputBundle, is_close_requested, is_key};
 use amethyst::prelude::*;
 use amethyst::renderer::{Camera, ColorMask, DisplayConfig, DrawFlat, Event,
-                         Material, MaterialDefaults, Mesh, Pipeline, PosTex, Projection,
-                         RenderBundle, ScreenDimensions, Stage, VirtualKeyCode, ALPHA,
-                         MaterialTextureSet};
+                         Material, MaterialDefaults, MaterialTextureSet, Mesh, Pipeline, PosTex,
+                         Projection, RenderBundle, ScreenDimensions, Stage, VirtualKeyCode,
+                         ALPHA};
 use amethyst::ui::{DrawUi, UiBundle};
 
 const BACKGROUND_COLOUR: [f32; 4] = [0.0, 0.0, 0.0, 1.0]; // black
