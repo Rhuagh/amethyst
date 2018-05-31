@@ -216,5 +216,5 @@ For an example of a `Prefab` in `ron` format, look at `examples/assets/prefab/ex
 )
 ```
 
-For a more advanced example, and also a custom `PrefabData` implementation, check the `gltf` example 
+For a more advanced example, and also a custom `PrefabData` implementation, look at the `gltf` example 
 and `examples/assets/prefab/puffy_scene.ron`.
